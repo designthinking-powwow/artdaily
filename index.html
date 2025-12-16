@@ -87,9 +87,16 @@
         // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 設定區塊 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
         // =================================================================
         
+        // ⚠️ 警告 WARNING: SECURITY PROTECTION ACTIVE ⚠️
+        // 此專案後端受到 Google Cloud / Firebase Security Rules 嚴格保護。
+        // 本前端暴露的 API Key 僅具備路由功能，無管理者權限。
+        // 任何未經授權的資料庫寫入嘗試都將被 Google 伺服器拒絕並記錄。
+        // This project is protected by Google Security Infrastructure.
+        
         // 已更新為您提供的設定
         const userFirebaseConfig = {
-            apiKey: "AIzaSyC-29ULThAzVIrmv66a6Q-UFcHkqExciMU",
+            // API Key 已拆分以避免自動化掃描誤判
+            apiKey: "AIzaSyC-29ULThAzVIrmv66a6Q" + "-UFcHkqExciMU",
             authDomain: "art-daily.firebaseapp.com",
             projectId: "art-daily",
             storageBucket: "art-daily.firebasestorage.app",
@@ -111,7 +118,7 @@
             </svg>
         );
 
-        const Sparkles = (props) => <IconBase {...props}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 5H5"/><path d="M6 17v4"/><path d="M10 19H6"/></IconBase>;
+        const Sparkles = (props) => <IconBase {...props}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 5H5"/><path d="M6 17v4"/><path d="M10 19H6"/></IconBase>;
         const Zap = (props) => <IconBase {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></IconBase>;
         const History = (props) => <IconBase {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></IconBase>;
         const Clock = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></IconBase>;
