@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creative Daily 每日創意</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc, serverTimestamp, arrayUnion, increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        window.firebaseModules = {
+            initializeApp,
+            auth: { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken },
+            firestore: { 
+                getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc, serverTimestamp,
+                arrayUnion, increment // 修復：直接匯出 arrayUnion，不再包在 FieldValue 裡
+            }
+        };
+        
+        window.dispatchEvent(new Event('firebase-ready'));
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Space+Grotesk:wght@300;500;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+
+        .font-display {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        /* Card Flip Animation */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+        .transform-style-3d {
+            transform-style: preserve-3d;
+        }
+        .backface-hidden {
+            backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+
+        .neon-border {
+            box-shadow: 0 0 10px rgba(236, 72, 153, 0.3), 0 0 20px rgba(236, 72, 153, 0.1);
+        }
+        
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // =================================================================
+        // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 設定區塊 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+        // =================================================================
+        
+        // 已更新為您提供的設定
+        const userFirebaseConfig = {
+            apiKey: "AIzaSyC-29ULThAzVIrmv66a6Q-UFcHkqExciMU",
+            authDomain: "art-daily.firebaseapp.com",
+            projectId: "art-daily",
+            storageBucket: "art-daily.firebasestorage.app",
+            messagingSenderId: "145166039026",
+            appId: "1:145166039026:web:6baf63e822ae374c3f5d6b",
+            measurementId: "G-7CJ2J7816T"
+        };
+
+        // =================================================================
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 設定結束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+        // =================================================================
+
+        const appId = window.__app_id || 'art-daily-v1';
+        
+        // --- Icons ---
+        const IconBase = ({ children, className = "", size = 24, color = "currentColor" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const Sparkles = (props) => <IconBase {...props}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 5H5"/><path d="M6 17v4"/><path d="M10 19H6"/></IconBase>;
+        const Zap = (props) => <IconBase {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></IconBase>;
+        const History = (props) => <IconBase {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></IconBase>;
+        const Clock = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></IconBase>;
+        const CheckCircle2 = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></IconBase>;
+        const XCircle = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></IconBase>;
+        const HelpCircle = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></IconBase>;
+        const ChevronLeft = (props) => <IconBase {...props}><path d="m15 18-6-6 6-6"/></IconBase>;
+        const Lock = (props) => <IconBase {...props}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></IconBase>;
+        const Pen = (props) => <IconBase {...props}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></IconBase>;
+        const ExternalLink = (props) => <IconBase {...props}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></IconBase>;
+        const AlertTriangle = (props) => <IconBase {...props}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></IconBase>;
+
+        // --- Game Data & Logic ---
+        const LEVELS = {
+            EASY: { id: 'EASY', label: '初階', desc: '單項觀察', color: 'text-green-400', border: 'border-green-500', bg: 'bg-green-500/10', points: 20, penalty: -5 },
+            MEDIUM: { id: 'MEDIUM', label: '中階', desc: '跨界結合', color: 'text-blue-400', border: 'border-blue-500', bg: 'bg-blue-500/10', points: 50, penalty: -15 },
+            HARD: { id: 'HARD', label: '高階', desc: '虛構創作', color: 'text-purple-400', border: 'border-purple-500', bg: 'bg-purple-500/10', points: 100, penalty: -30 },
+            SUPER_HARD: { id: 'SUPER_HARD', label: '頂階', desc: '抽象概念', color: 'text-pink-500', border: 'border-pink-600', bg: 'bg-pink-600/10', points: 300, penalty: -100 }
+        };
+
+        const CATEGORIES = {
+            'NATURE': { label: '大自然', icon: '🌿', items: ['蘑菇', '鯨魚', '仙人掌', '火山', '水晶', '樹懶', '水母', '盆栽', '雷雨雲', '枯木'] },
+            'SCIFI': { label: '科幻未來', icon: '🤖', items: ['機器人', '太空船', '光劍', '生化人', '浮空車', '全息投影', '外星生物', '機械手臂', '傳送門'] },
+            'DAILY': { label: '日常物品', icon: '☕', items: ['咖啡機', '球鞋', '雨傘', '復古相機', '泡麵', '遊戲手把', '檯燈', '腳踏車', '背包'] },
+            'FANTASY': { label: '奇幻魔法', icon: '🐉', items: ['巨龍', '魔法書', '魔藥', '精靈', '哥布林', '漂浮城堡', '獨角獸', '寶箱', '符文石'] },
+            'FOOD': { label: '美味食物', icon: '🍔', items: ['漢堡', '壽司', '甜甜圈', '冰淇淋', '珍珠奶茶', '披薩', '鬆餅', '拉麵', '三明治'] },
+            'CHARACTER': { label: '角色人物', icon: '👤', items: ['騎士', '太空人', '偵探', '巫師', '忍者', '龐克族', '潛水員', '小丑', '武士'] }
+        };
+
+        const ABSTRACT_CONCEPTS = ['寂寞', '時間的流逝', '混亂中的秩序', '無聲的吶喊', '遺忘', '希望', '夢境邊緣', '速度感', '焦慮', '平靜'];
+        const NON_EXISTENT_ADJECTIVES = ['隱形的', '液態的', '燃燒的', '機械化的', '長滿眼睛的', '飄浮的', '幾何形狀的', '像素化的', '發光的'];
+
+        const generateTask = (categoryKey, levelKey) => {
+            let title = "";
+            let desc = "";
+
+            const category = CATEGORIES[categoryKey];
+            const items = category.items;
+            const randomItem = () => items[Math.floor(Math.random() * items.length)];
+            const randomAnyItem = () => {
+                const keys = Object.keys(CATEGORIES);
+                const k = keys[Math.floor(Math.random() * keys.length)];
+                const i = CATEGORIES[k].items;
+                return i[Math.floor(Math.random() * i.length)];
+            };
+
+            if (levelKey === 'SUPER_HARD') { 
+                const concept = ABSTRACT_CONCEPTS[Math.floor(Math.random() * ABSTRACT_CONCEPTS.length)];
+                title = `表現概念：${concept}`;
+                desc = `頂階挑戰：請用創意的方式來表現抽象的「${concept}」。不限制任何形式(繪畫、設計、文字)，重點是傳達感覺與氛圍。`;
+            }
+            else if (levelKey === 'HARD') { 
+                const adj = NON_EXISTENT_ADJECTIVES[Math.floor(Math.random() * NON_EXISTENT_ADJECTIVES.length)];
+                const item = randomItem();
+                title = `不存在的：${adj}${item}`;
+                desc = `高階挑戰：想像並創作出一個「${adj}${item}」。它必須看起來不合邏輯，但又真實存在於你的作品中。`;
+            }
+            else if (levelKey === 'MEDIUM') { 
+                const item1 = randomItem();
+                const item2 = randomAnyItem(); // Cross-over
+                title = `結合：${item1} + ${item2}`;
+                desc = `中階挑戰：將「${item1}」與「${item2}」完美融合，設計出一個全新的混種物體或概念。`;
+            }
+            else { 
+                // EASY
+                const item = randomItem();
+                title = `創意觀察：${item}`;
+                desc = `初階挑戰：專注於描繪「${item}」。嘗試捕捉它的特徵，或用你獨特的風格重新詮釋它。`;
+            }
+            
+            return {
+                id: crypto.randomUUID(),
+                title,
+                desc,
+                level: levelKey,
+                category: category.label,
+                createdAt: Date.now(),
+                status: 'active'
+            };
+        };
+
+        const isSameDay = (timestamp1, timestamp2) => {
+            if (!timestamp1 || !timestamp2) return false;
+            const d1 = new Date(timestamp1);
+            const d2 = new Date(timestamp2);
+            return d1.getFullYear() === d2.getFullYear() &&
+                   d1.getMonth() === d2.getMonth() &&
+                   d1.getDate() === d2.getDate();
+        };
+
+        // --- Helper Components ---
+        const formatTime = (ms) => {
+            if (ms <= 0) return "00:00:00";
+            const h = Math.floor(ms / 3600000);
+            const m = Math.floor((ms % 3600000) / 60000);
+            const s = Math.floor((ms % 60000) / 1000);
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        };
+
+        const HelpModal = ({ onClose }) => (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                <div className="bg-slate-800 rounded-2xl max-w-md w-full p-6 border border-slate-700 shadow-2xl relative">
+                    <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white"><XCircle size={24} /></button>
+                    <h2 className="text-xl font-bold mb-4 text-pink-400 flex items-center gap-2">
+                        <HelpCircle size={24} /> 遊戲說明
+                    </h2>
+                    <div className="space-y-4 text-sm text-slate-300">
+                        <div className="p-3 bg-slate-900 rounded-lg">
+                            <h3 className="font-bold text-white mb-2">⚡ Creative Daily 規則</h3>
+                            <ul className="list-disc pl-4 space-y-1">
+                                <li><span className="text-yellow-400 font-bold">每日限定</span>：每天只能抽取一次創意題目。</li>
+                                <li><span className="text-red-400 font-bold">起手無回</span>：題目一旦生成，就不能更換或放棄。</li>
+                                <li>任務需在 <span className="text-green-400 font-bold">24小時</span> 內完成。</li>
+                                <li>如果今天沒做完，題目會保留，隨時可以回來完成（只要沒過期）。</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="w-full mt-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold transition">
+                        了解！
+                    </button>
+                </div>
+            </div>
+        );
+        
+        const CountdownTimer = ({ targetDate, onExpire }) => {
+            const [timeLeft, setTimeLeft] = useState(targetDate - Date.now());
+
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    const remaining = targetDate - Date.now();
+                    setTimeLeft(remaining);
+                    if (remaining <= 0) {
+                        clearInterval(interval);
+                        onExpire && onExpire();
+                    }
+                }, 1000);
+                return () => clearInterval(interval);
+            }, [targetDate]);
+
+            return <span>{formatTime(timeLeft)}</span>;
+        };
+
+        // --- Main App Component ---
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [userData, setUserData] = useState(null);
+            const [activeTask, setActiveTask] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [view, setView] = useState('home'); 
+            const [userNameInput, setUserNameInput] = useState('');
+            const [isFlipped, setIsFlipped] = useState(false);
+            const [playedToday, setPlayedToday] = useState(false);
+            const [firebaseReady, setFirebaseReady] = useState(false);
+            const [configError, setConfigError] = useState(false);
+            const [errorDetail, setErrorDetail] = useState('');
+            
+            // Flow State
+            const [showCategorySelect, setShowCategorySelect] = useState(false);
+            const [selectedCategory, setSelectedCategory] = useState(null);
+            const [showHelp, setShowHelp] = useState(false);
+            
+            // Firebase References
+            const authRef = useRef(null);
+            const dbRef = useRef(null);
+
+            // 1. Wait for Firebase SDK and Initialize
+            useEffect(() => {
+                const init = async () => {
+                    if (window.firebaseModules) {
+                         try {
+                            const { initializeApp } = window.firebaseModules;
+                            const { getAuth, signInAnonymously, onAuthStateChanged } = window.firebaseModules.auth;
+                            const { getFirestore } = window.firebaseModules.firestore;
+
+                            let finalConfig = userFirebaseConfig;
+                            
+                            // Check if user config is placeholder
+                            const isUserConfigValid = userFirebaseConfig.apiKey !== "您的_API_KEY" && !userFirebaseConfig.apiKey.includes("您的");
+
+                            if (!isUserConfigValid) {
+                                if (window.__firebase_config) {
+                                    console.log("偵測到預覽環境，使用預設 Firebase Config");
+                                    try {
+                                        finalConfig = JSON.parse(window.__firebase_config);
+                                    } catch(e) {
+                                        console.error("預覽環境 Config 解析失敗", e);
+                                        setConfigError(true);
+                                        setLoading(false);
+                                        return;
+                                    }
+                                } else {
+                                    console.error("找不到有效的 Firebase Config");
+                                    setConfigError(true);
+                                    setLoading(false);
+                                    return;
+                                }
+                            }
+
+                            const app = initializeApp(finalConfig);
+                            authRef.current = getAuth(app);
+                            dbRef.current = getFirestore(app);
+                            
+                            onAuthStateChanged(authRef.current, async (currentUser) => {
+                                if (currentUser) {
+                                    setUser(currentUser);
+                                } else {
+                                    try {
+                                        await signInAnonymously(authRef.current);
+                                    } catch (err) {
+                                        console.error("匿名登入失敗:", err);
+                                        setConfigError(true);
+                                        setErrorDetail(err.message || JSON.stringify(err));
+                                        setLoading(false);
+                                    }
+                                }
+                            });
+                            setFirebaseReady(true);
+                        } catch (e) {
+                            console.error("Firebase Init Error:", e);
+                            setConfigError(true);
+                            setErrorDetail(e.message || JSON.stringify(e));
+                            setLoading(false);
+                        }
+                    }
+                };
+                
+                init();
+                window.addEventListener('firebase-ready', init);
+                return () => window.removeEventListener('firebase-ready', init);
+            }, []);
+
+            // 2. Fetch User Data & Check Daily Status
+            useEffect(() => {
+                if (!user || !firebaseReady || !dbRef.current) return;
+
+                const { doc, onSnapshot, updateDoc, arrayUnion } = window.firebaseModules.firestore;
+                const userRef = doc(dbRef.current, 'artifacts', appId, 'users', user.uid, 'gameData', 'profile');
+                
+                const unsubUserData = onSnapshot(userRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        setUserData(data);
+                        setUserNameInput(data.displayName || '');
+                        
+                        if (data.lastDailyDraw && isSameDay(data.lastDailyDraw, Date.now())) {
+                            setPlayedToday(true);
+                        } else {
+                            setPlayedToday(false);
+                        }
+
+                        if (data.currentTask && data.currentTask.status === 'active') {
+                            const now = Date.now();
+                            const endTime = data.currentTask.createdAt + (24 * 60 * 60 * 1000);
+                            
+                            if (now > endTime) {
+                                handleTaskExpiry(data.currentTask, data.score, user.uid);
+                            } else {
+                                setActiveTask(data.currentTask);
+                            }
+                        } else {
+                            setActiveTask(null);
+                        }
+                    } else {
+                        setUserData({ score: 0, displayName: '', history: [] });
+                    }
+                    setLoading(false);
+                }, (error) => {
+                    console.error("Data fetch error", error);
+                    // alert("讀取資料失敗，請確認您的資料庫已建立且網路正常。");
+                });
+
+                return () => unsubUserData();
+            }, [user, firebaseReady]);
+
+            const handleTaskExpiry = async (task, currentScore, uid) => {
+                if (!dbRef.current) return;
+                const { doc, updateDoc, arrayUnion } = window.firebaseModules.firestore;
+                
+                const penalty = LEVELS[task.level].penalty;
+                const newScore = currentScore + penalty;
+                const failedTask = { ...task, status: 'failed', completedAt: Date.now() };
+
+                const userRef = doc(dbRef.current, 'artifacts', appId, 'users', uid, 'gameData', 'profile');
+                await updateDoc(userRef, {
+                    score: newScore,
+                    currentTask: null,
+                    history: arrayUnion(failedTask)
+                });
+
+                alert(`挑戰過期！ ${LEVELS[task.level].label} 任務失敗，扣除 ${Math.abs(penalty)} 分。`);
+            };
+
+            const setDisplayName = async () => {
+                if (!user || !userNameInput.trim() || !dbRef.current) return;
+                const { doc, setDoc } = window.firebaseModules.firestore;
+                const userRef = doc(dbRef.current, 'artifacts', appId, 'users', user.uid, 'gameData', 'profile');
+                const initialData = {
+                    score: 0,
+                    displayName: userNameInput.trim(),
+                    currentTask: null,
+                    history: []
+                };
+                await setDoc(userRef, initialData, { merge: true });
+            };
+
+            const handleCategorySelect = (key) => {
+                setSelectedCategory(key);
+            };
+            
+             const startDraw = () => {
+                if(activeTask || playedToday) return;
+                setShowCategorySelect(true);
+                setSelectedCategory(null);
+            };
+
+            const confirmLevel = async (levelKey) => {
+                setShowCategorySelect(false);
+                if (!user || !selectedCategory || !dbRef.current) return;
+                
+                const { doc, updateDoc } = window.firebaseModules.firestore;
+                
+                // Animation trigger
+                setIsFlipped(true);
+
+                setTimeout(async () => {
+                    const newTask = generateTask(selectedCategory, levelKey);
+                    const userRef = doc(dbRef.current, 'artifacts', appId, 'users', user.uid, 'gameData', 'profile');
+                    await updateDoc(userRef, {
+                        currentTask: newTask,
+                        lastDailyDraw: Date.now() // Record Draw Time
+                    });
+                    setIsFlipped(false);
+                    setSelectedCategory(null); 
+                }, 600);
+            };
+
+            const completeTask = async () => {
+                if (!user || !activeTask || !dbRef.current) return;
+                const { doc, updateDoc, arrayUnion } = window.firebaseModules.firestore;
+
+                const reward = LEVELS[activeTask.level].points;
+                const newScore = (userData.score || 0) + reward;
+                
+                const completedTask = { 
+                    ...activeTask, 
+                    status: 'completed', 
+                    completedAt: Date.now()
+                };
+
+                const userRef = doc(dbRef.current, 'artifacts', appId, 'users', user.uid, 'gameData', 'profile');
+                await updateDoc(userRef, {
+                    score: newScore,
+                    currentTask: null,
+                    history: arrayUnion(completedTask)
+                });
+            };
+
+            if (configError) {
+                // Check specifically for configuration not found or admin restricted errors
+                const isAuthNotEnabled = errorDetail && (errorDetail.includes('configuration-not-found') || errorDetail.includes('admin-restricted-operation'));
+
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-center">
+                        <div className="max-w-md w-full bg-slate-800 p-8 rounded-2xl border border-red-500/30 neon-border">
+                            <div className="flex justify-center mb-4 text-red-400">
+                                <AlertTriangle size={48} />
+                            </div>
+                            <h1 className="text-2xl font-display font-bold mb-4 text-red-400">連線發生錯誤</h1>
+                            
+                            {isAuthNotEnabled ? (
+                                <div className="text-left bg-slate-900/50 p-4 rounded-lg border border-red-500/20 mb-4">
+                                    <h3 className="text-white font-bold mb-2">🔴 關鍵步驟：啟用 Authentication</h3>
+                                    <p className="text-slate-300 text-sm mb-2">您的 Firebase 專案尚未開啟「匿名登入」功能，導致無法連線。</p>
+                                    <ol className="text-slate-400 text-sm list-decimal pl-4 space-y-1">
+                                        <li>前往 Firebase Console &gt; <b>Build</b> &gt; <b>Authentication</b></li>
+                                        <li>點擊 <b>Get started</b> (如果還沒按的話)</li>
+                                        <li>點擊 <b>Sign-in method</b> 分頁</li>
+                                        <li>點擊 <b>Anonymous</b>，切換為 <b>Enable</b></li>
+                                        <li>按下 <b>Save</b></li>
+                                    </ol>
+                                </div>
+                            ) : (
+                                <React.Fragment>
+                                    <p className="text-slate-300 mb-2">
+                                        請檢查您的 Firebase 設定：
+                                    </p>
+                                    <div className="bg-black/30 p-3 rounded-lg mb-4 text-left">
+                                        <p className="text-red-300 font-mono text-xs break-all">{errorDetail}</p>
+                                    </div>
+                                    <div className="text-sm text-slate-400 text-left space-y-2 mb-6">
+                                        <p>常見原因：</p>
+                                        <ul className="list-disc pl-4 space-y-1">
+                                            <li><b>API Key 錯誤</b>：請確認 <code>projectId</code> 是否正確。</li>
+                                            <li><b>網域未授權</b>：請至 Authentication &gt; Settings &gt; Authorized Domains 新增網址。</li>
+                                        </ul>
+                                    </div>
+                                </React.Fragment>
+                            )}
+
+                            <a 
+                                href="https://console.firebase.google.com/" 
+                                target="_blank"
+                                className="w-full inline-flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition"
+                            >
+                                <ExternalLink size={18} /> 前往 Firebase 控制台
+                            </a>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (loading) return <div className="min-h-screen flex items-center justify-center text-pink-400 animate-pulse bg-slate-900">Loading Creative Daily...</div>;
+
+            if (!userData || !userData.displayName) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900">
+                        <div className="max-w-md w-full bg-slate-800 p-8 rounded-2xl border border-pink-500/30 neon-border text-center">
+                            <div className="mx-auto mb-4 w-12 h-12 flex items-center justify-center">
+                                <Pen className="text-pink-400" size={48} />
+                            </div>
+                            <h1 className="text-3xl font-display font-bold mb-2 bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">Creative Daily</h1>
+                            <p className="text-slate-400 mb-6">輸入你的代號，開始每日創意修煉。</p>
+                            <input 
+                                type="text" 
+                                value={userNameInput}
+                                onChange={(e) => setUserNameInput(e.target.value)}
+                                placeholder="E.g. Creator_2077"
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white mb-4 focus:outline-none focus:border-pink-500 transition"
+                            />
+                            <button 
+                                onClick={setDisplayName}
+                                disabled={!userNameInput.trim()}
+                                className="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                開始旅程
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            const canPlay = !activeTask && !playedToday;
+            const isDoneForToday = !activeTask && playedToday;
+
+            return (
+                <div className="min-h-screen pb-20 relative overflow-hidden bg-slate-900">
+                    {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+
+                    <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0">
+                        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-pink-900/10 rounded-full blur-3xl"></div>
+                        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-900/10 rounded-full blur-3xl"></div>
+                    </div>
+
+                    <header className="relative z-10 px-6 py-4 flex justify-between items-center backdrop-blur-md border-b border-white/5 sticky top-0">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-pink-500 to-purple-500 flex items-center justify-center font-bold text-lg shadow-lg shadow-pink-500/20">
+                                {userData.displayName.substring(0,2).toUpperCase()}
+                            </div>
+                            <div>
+                                <h2 className="font-bold text-sm text-slate-200">{userData.displayName}</h2>
+                                <p className="text-xs text-pink-400 font-mono">SCORE: {userData.score}</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                             <button onClick={() => setShowHelp(true)} className="p-2 rounded-lg text-slate-400 hover:text-white transition">
+                                <HelpCircle size={20} />
+                             </button>
+                             <button onClick={() => setView('home')} className={`p-2 rounded-lg transition ${view === 'home' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`}>
+                                <Zap size={20} />
+                            </button>
+                             <button onClick={() => setView('history')} className={`p-2 rounded-lg transition ${view === 'history' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`}>
+                                <History size={20} />
+                            </button>
+                        </div>
+                    </header>
+
+                    <main className="relative z-10 p-6 max-w-2xl mx-auto">
+                        
+                        {view === 'home' && (
+                            <div className="flex flex-col items-center">
+                                <h1 className="text-2xl font-display font-bold mb-8 text-center bg-gradient-to-r from-pink-300 to-purple-300 bg-clip-text text-transparent">
+                                    {activeTask ? '當前挑戰' : 'Creative Daily 每日創意'}
+                                </h1>
+
+                                {showCategorySelect && canPlay ? (
+                                    <div className="w-full max-w-sm animate-fade-in glass-panel p-6 rounded-2xl min-h-[400px]">
+                                        {!selectedCategory ? (
+                                            <React.Fragment>
+                                                <h3 className="text-lg font-bold mb-4 text-center text-white">Step 1: 選擇主題</h3>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {Object.keys(CATEGORIES).map(key => (
+                                                        <button 
+                                                            key={key}
+                                                            onClick={() => handleCategorySelect(key)}
+                                                            className="p-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-pink-500 rounded-xl transition text-sm font-bold text-slate-200 flex flex-col items-center gap-1"
+                                                        >
+                                                            <span className="text-2xl mb-1">{CATEGORIES[key].icon}</span>
+                                                            {CATEGORIES[key].label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </React.Fragment>
+                                        ) : (
+                                            <React.Fragment>
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <button onClick={() => setSelectedCategory(null)} className="text-slate-400 hover:text-white flex items-center gap-1 text-sm"><ChevronLeft size={16}/> 重選</button>
+                                                    <h3 className="text-lg font-bold text-center text-white">Step 2: 選擇難度</h3>
+                                                    <div className="w-10"></div>
+                                                </div>
+                                                
+                                                <div className="flex flex-col gap-3">
+                                                    {Object.values(LEVELS).map(level => (
+                                                        <button 
+                                                            key={level.id}
+                                                            onClick={() => confirmLevel(level.id)}
+                                                            className={`p-4 rounded-xl border transition text-left relative overflow-hidden group ${level.border} ${level.bg}`}
+                                                        >
+                                                            <div className="relative z-10">
+                                                                <div className="flex justify-between items-center mb-1">
+                                                                    <span className={`font-bold ${level.color}`}>{level.label}</span>
+                                                                    <span className="text-xs bg-black/20 px-2 py-0.5 rounded text-white font-mono">+{level.points}</span>
+                                                                </div>
+                                                                <p className="text-xs text-slate-300">{level.desc}</p>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </React.Fragment>
+                                        )}
+                                        <button onClick={() => setShowCategorySelect(false)} className="w-full mt-6 py-2 text-slate-500 hover:text-slate-300 text-sm">取消</button>
+                                    </div>
+                                ) : (
+                                    <div className="relative w-full max-w-sm aspect-[3/4] perspective-1000 mb-8">
+                                        <div className={`relative w-full h-full transition-all duration-700 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+                                            
+                                            {/* Card Front */}
+                                            <div className="absolute w-full h-full backface-hidden rounded-2xl shadow-2xl overflow-hidden border border-white/10 flex flex-col bg-slate-800">
+                                                {activeTask ? (
+                                                    <div className="h-full flex flex-col relative">
+                                                        <div className={`h-2 absolute top-0 left-0 w-full ${LEVELS[activeTask.level].bg.replace('/10', '')}`}></div>
+                                                        <div className="p-6 flex-1 flex flex-col items-center text-center justify-center">
+                                                            <div className="flex flex-col items-center">
+                                                                <span className={`px-3 py-1 rounded-full text-xs font-bold mb-2 border ${LEVELS[activeTask.level].border} ${LEVELS[activeTask.level].color} ${LEVELS[activeTask.level].bg}`}>
+                                                                    {LEVELS[activeTask.level].label} (+{LEVELS[activeTask.level].points})
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-500 uppercase tracking-widest mb-4">{activeTask.category}</span>
+                                                            </div>
+                                                            
+                                                            <h3 className="text-2xl font-bold mb-3 leading-tight text-white">{activeTask.title}</h3>
+                                                            <p className="text-slate-300 text-sm mb-6 bg-slate-900/50 p-4 rounded-lg w-full">
+                                                                {activeTask.desc}
+                                                            </p>
+
+                                                            <div className="bg-slate-900/50 rounded-lg p-3 w-full border border-slate-700">
+                                                                <div className="flex items-center justify-center gap-2 text-yellow-400 font-mono text-xl">
+                                                                    <Clock size={20} />
+                                                                    <CountdownTimer targetDate={activeTask.createdAt + 86400000} onExpire={() => handleTaskExpiry(activeTask, userData.score, user.uid)} />
+                                                                </div>
+                                                                <p className="text-[10px] text-center text-slate-500 mt-1">逾時扣分: {LEVELS[activeTask.level].penalty}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="p-4 bg-slate-900 border-t border-slate-700">
+                                                            <button 
+                                                                onClick={completeTask}
+                                                                className="w-full py-3 rounded-lg bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold text-sm shadow-lg shadow-pink-900/50 transition transform hover:scale-105"
+                                                            >
+                                                                完成任務
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div 
+                                                        onClick={startDraw}
+                                                        className={`h-full group transition-all duration-300 bg-gradient-to-br from-slate-800 to-slate-900 flex flex-col items-center justify-center p-8 relative ${isDoneForToday ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:scale-[1.02]'}`}
+                                                    >
+                                                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                                                        
+                                                        {isDoneForToday ? (
+                                                            <React.Fragment>
+                                                                <div className="w-24 h-24 rounded-full border-2 border-slate-600 flex items-center justify-center mb-6 bg-slate-800/50">
+                                                                    <Lock className="text-slate-500" size={40} />
+                                                                </div>
+                                                                <h3 className="text-xl font-bold text-slate-400">今日任務已結束</h3>
+                                                                <p className="text-sm text-slate-500 mt-2">請明天再來</p>
+                                                            </React.Fragment>
+                                                        ) : (
+                                                            <React.Fragment>
+                                                                <div className="w-24 h-24 rounded-full border-2 border-pink-500/50 flex items-center justify-center mb-6 group-hover:border-pink-400 group-hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all bg-slate-800">
+                                                                    <Sparkles className="text-pink-400" size={40} />
+                                                                </div>
+                                                                <h3 className="text-xl font-bold text-slate-300 group-hover:text-white">開始今日挑戰</h3>
+                                                                <p className="text-sm text-slate-500 mt-2">點擊選擇主題與難度</p>
+                                                            </React.Fragment>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Card Back */}
+                                            <div className="absolute w-full h-full backface-hidden rotate-y-180 rounded-2xl bg-slate-800 shadow-2xl flex items-center justify-center border border-pink-500/50 neon-border">
+                                                <div className="animate-spin text-pink-400">
+                                                    <Zap size={48} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                {!activeTask && !showCategorySelect && (
+                                    <p className="text-slate-500 text-sm max-w-xs text-center">
+                                        {isDoneForToday ? "休息是為了走更長遠的路。" : "每天一張卡片，激發無限創意。"}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {view === 'history' && (
+                            <div className="animate-fade-in">
+                                <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                                    <History className="text-slate-400" /> 創作歷程
+                                </h2>
+                                <div className="space-y-3">
+                                    {(!userData.history || userData.history.length === 0) ? (
+                                        <div className="text-center py-10 text-slate-500">
+                                            尚未完成任何挑戰。去創作一件吧！
+                                        </div>
+                                    ) : (
+                                        [...userData.history].reverse().map((task) => (
+                                            <div key={task.id} className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className={`text-[10px] px-2 py-0.5 rounded border ${LEVELS[task.level].border} ${LEVELS[task.level].color}`}>
+                                                            {LEVELS[task.level].label}
+                                                        </span>
+                                                        <span className="text-xs text-slate-500">
+                                                            {new Date(task.completedAt).toLocaleDateString()}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-slate-300 font-medium text-sm">{task.title}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {task.status === 'completed' ? (
+                                                        <span className="text-green-400 font-bold flex items-center gap-1 text-sm">
+                                                            +{LEVELS[task.level].points} <CheckCircle2 size={16} />
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-red-400 font-bold flex items-center gap-1 text-sm">
+                                                            {LEVELS[task.level].penalty} <XCircle size={16} />
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
